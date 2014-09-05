@@ -7,6 +7,8 @@
  #define MEASURE_INTERVAL_MS 30000
 
  #include <SPI.h>
+ #include <stdio.h>
+ #include <math.h>
  #include "nRF24L01.h"
  #include "RF24.h"
  #include "printf.h"
@@ -69,13 +71,13 @@ void setup(void)
 void loop(void)
 {
   float temperature = get_temperature();
+  char* temperature_str = float_to_string(temperature);
 
   // TODO Generate this automatically
   String message = "{\"temperature\": ";
-  message.concat((int)temperature);
-  message.concat(".");
-  message.concat(((int)(temperature * 100) % 100));
-  message.concat("}");   
+  message.concat(temperature_str);
+  message.concat("}");
+  free(temperature_str);
   
   // Print message
   Serial.println(message);
@@ -89,4 +91,34 @@ void loop(void)
 
   // Delay
   delay(MEASURE_INTERVAL_MS);
+}
+
+
+/**
+ * Cast float to string with two decimal parts.
+ * Malloc null return not handled.
+ */
+char* float_to_string(float num) {
+  // Do not handle negative
+  bool wasNegative = false;
+  if (num<0) {
+    num = num * -1;
+    wasNegative = true;
+  }
+  int full = (int) num;
+  int decimal = (num - full) * 100;
+  int num_digits = floor(log10(abs(full))) + 1;
+
+  char* output;
+  int extra_payload = 3;
+  char* format = "%d.%d";
+  if (wasNegative) {
+    extra_payload = 4;
+    format = "-%d.%d";
+  }
+  output = (char*) malloc(sizeof(char)*(num_digits+extra_payload));
+  if (output != NULL) {
+    sprintf(output, format, full, decimal);
+  }
+  return output;
 }
