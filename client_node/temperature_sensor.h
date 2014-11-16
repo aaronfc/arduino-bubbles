@@ -1,56 +1,62 @@
+/*
+ * Temperature sensor file.
+ */
 #ifndef __TEMPERATURE_SENSOR_H__
 #define __TEMPERATURE_SENSOR_H__
 
 #ifdef ARDUINO_CLIENT_NODE
 
-#include "RunningMedian.h"
+int DS18S20_Pin = 2; //DS18S20 Signal pin on digital 2
 
-// which analog pin to connect
-#define THERMISTORPIN A0         
-// resistance at 25 degrees C
-#define THERMISTORNOMINAL 10000      
-// temp. for nominal resistance (almost always 25 C)
-#define TEMPERATURENOMINAL 25   
-// how many samples to take and average, more takes longer
-// but is more 'smooth'
-#define NUMSAMPLES 10
-// The beta coefficient of the thermistor (usually 3000-4000)
-#define BCOEFFICIENT 3950
-// the value of the 'other' resistor
-#define SERIESRESISTOR 10000
+//Temperature chip i/o
+OneWire ds(DS18S20_Pin); // on digital pin 2
+
 
 float get_temperature(void) {
-  uint8_t i;
-  float average;
-  RunningMedian<float, NUMSAMPLES> myMedian;
+ //returns the temperature from one DS18S20 in DEG Celsius
 
-  // take N samples in a row, with a slight delay
-  for (i=0; i< NUMSAMPLES; i++) {
-    // now.. add some sensor-data and loop...
-    myMedian.add(analogRead(THERMISTORPIN));
-    delay(50);
-  }
- 
-  myMedian.getMedian(average);
- 
-  Serial.print("Median analog reading: "); 
-  Serial.println(average);
-  // convert the value to resistance
-  average = 1023 / average - 1;
-  average = SERIESRESISTOR / average;
-  Serial.print("Thermistor resistance: "); 
-  Serial.println(average);
+ byte data[12];
+ byte addr[8];
 
-  float steinhart;
-  steinhart = average / THERMISTORNOMINAL;     // (R/Ro)
-  steinhart = log(steinhart);                  // ln(R/Ro)
-  steinhart /= BCOEFFICIENT;                   // 1/B * ln(R/Ro)
-  steinhart += 1.0 / (TEMPERATURENOMINAL + 273.15); // + (1/To)
-  steinhart = 1.0 / steinhart;                 // Invert
-  steinhart -= 273.15;                         // convert to C
-
-  return steinhart;
+ if ( !ds.search(addr)) {
+   //no more sensors on chain, reset search
+   ds.reset_search();
+   return -1000;
  }
+
+ if ( OneWire::crc8( addr, 7) != addr[7]) {
+   Serial.println("CRC is not valid!");
+   return -1000;
+ }
+
+ if ( addr[0] != 0x10 && addr[0] != 0x28) {
+   Serial.print("Device is not recognized");
+   return -1000;
+ }
+
+ ds.reset();
+ ds.select(addr);
+ ds.write(0x44,1); // start conversion, with parasite power on at the end
+
+ byte present = ds.reset();
+ ds.select(addr);  
+ ds.write(0xBE); // Read Scratchpad
+
+ 
+ for (int i = 0; i < 9; i++) { // we need 9 bytes
+  data[i] = ds.read();
+ }
+ 
+ ds.reset_search();
+ 
+ byte MSB = data[1];
+ byte LSB = data[0];
+
+ float tempRead = ((MSB << 8) | LSB); //using two's compliment
+ float TemperatureSum = tempRead / 16;
+ 
+ return TemperatureSum;
+}
 
 
 // End

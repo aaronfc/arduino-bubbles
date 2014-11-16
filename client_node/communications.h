@@ -10,6 +10,22 @@
 
 #define MAX_RETRIES 10
 
+//
+// Hardware configuration
+//
+
+// Set up nRF24L01 radio on SPI bus plus pins 9 & 10
+
+RF24 radio(8,9);
+
+//
+// Topology
+//
+
+// Radio pipe addresses for the 2 nodes to communicate.
+const uint64_t pipe_to_central = 0xE8E8F0F0E1LL;
+
+
 /**
  * Deliver a character, with up to MAX_RETRIES retries.
  *
