@@ -7,7 +7,7 @@
 #include "nRF24L01.h"
 #include "RF24.h"
 #include "printf.h"
-#include <MemoryFree.h>
+//#include <MemoryFree.h>
 
 // RF -----------------------------------------------
 
@@ -16,12 +16,8 @@
 //
 
 // Set up nRF24L01 radio on SPI bus plus pins 8 & 9
-
 RF24 radio(8,9);
 
-//
-// Topology
-//
 
 // Ethernet ----------------------------------------
 
@@ -52,7 +48,6 @@ void setup(void)
 
   Serial.begin(57600);
   printf_begin();
-  Serial.println(F("\n\rRF24/examples/pingpair/\n\r"));
   Serial.println(F("ROLE: CENTRAL NODE\n\r"));
 
   //
@@ -74,12 +69,6 @@ void setup(void)
   radio.openReadingPipe(1,pipe_to_central);
 
   //
-  // Start listening
-  //
-
-  radio.startListening();
-
-  //
   // Dump the configuration of the rf unit for debugging
   //
   radio.printDetails();
@@ -99,50 +88,75 @@ void setup(void)
   Serial.println(F("Ready ethernet with IP:"));
   Serial.println(Ethernet.localIP());
 
-  Serial.println(F("Initial memory:"));
-  Serial.println(getFreeMemory());
+  //Serial.println(F("Initial memory:"));
+  //Serial.println(getFreeMemory());
 
+  // Start listening
+  radio.startListening();
+  Serial.println(F("Listening..."));
 }
 
 char inChar;
-char message[65] = "";
+char message[255] = "";
 int index = 0;
+bool receiving = false;
 void loop(void){
-  if (radio.available()){
-      /*Serial.println(millis());
-      Serial.println(F("Free memory:"));
-      Serial.println(getFreeMemory());*/
-      radio.read(&inChar, 1); 
-      //Serial.println(millis());
-      //Serial.println((char) msg[0]);
+  if (radio.available()) {
+      Serial.println(F("Something available!"));
+      inChar = 0;
+      radio.read(&inChar, 1);
+      Serial.println(F("Read: "));
+      Serial.println(inChar);
 
-      if (inChar == '^' || inChar == '#') {
+      if (inChar == 0) { // ignore couldn't read from radio
+        Serial.println(F("Ignoring!"));
+        return;
+      }
+
+      if (inChar == '^') {
+        receiving = true;
         message[0] = '\0';
         index = 0;
         return;
       }
-
-      if (inChar == '$') {
-        // End of message found!
-        Serial.println(F("MESSAGE:"));
-        Serial.println(message);
-
-        sendToRemote(message);
-
-        // Truncate message
+      if (inChar == '#') {
+        receiving = false;
         message[0] = '\0';
         index = 0;
+        Serial.println(F("Faulty message warning received! Resetting radio."));
+        resetRadio();
         return;
       }
+      if (receiving) {
+        if (inChar == '$') {
+          // End of message found!
+          Serial.println(F("MESSAGE:"));
+          Serial.println(message);
 
-      // This is executed only if it is a char distinct than ^, $ or #
-      message[index] = inChar;
-      message[index+1] = '\0';
-      index++;
-   }
+          // Shut down radio, we are going to do some heavy stuff. Wait to send the ack.
+          delay(100);
+          radio.powerDown();
+
+          // Deliver message
+          upload(message);
+  
+          // Reset the local message
+          message[0] = '\0';
+          index = 0;
+
+          resetRadio();
+          return;
+        }
+  
+        // This is executed only if it is a char distinct than ^, $ or #
+        message[index] = inChar;
+        message[index+1] = '\0';
+        index++;
+      }
+  }
 }
 
-void sendToRemote(const String theMessage) {
+void upload(const String theMessage) {
   if (client.connect(SERVER, 80)) {
     Serial.println(F("connected to remote"));
 
@@ -167,6 +181,16 @@ void sendToRemote(const String theMessage) {
   }
 }
 
+void resetRadio()
+{
+  delay(25); // Give some time to finish whatever it was doing
+  radio.powerDown();
+  delay(25); // Give it some time to power down properly
+  radio.powerUp();
+  delay(1000); // Give it a lot of time to power up
+  radio.startListening();
+  delay(25); // Give it some time to allow radio to start listening
+}
 
 /**
  * URL Encode a string.

@@ -7,7 +7,7 @@
 #define USE_RF true
 #define DEBUG true
 
-#define MEASURE_INTERVAL_MS 30000
+#define MEASURE_INTERVAL_MS 5000
 
 #include <SPI.h>
 #include <stdio.h>
@@ -24,39 +24,16 @@ void setup(void)
 {
   if (PRINT_SERIAL) {
     setup_serial();
-    print_node_info();
   }
 
   if (USE_RF) {
     setup_radio();
   }
-}
 
-void loop(void)
-{
-  float temperature = get_temperature();
-  char* temperature_str = float_to_string(temperature);
-
-  // TODO Generate this automatically
-  String message = "{\"temperature\": ";
-  message.concat(temperature_str);
-  message.concat("}");
-  free(temperature_str);
-  
-  // Print message
-  Serial.println(message);
-  
-  if (USE_RF) {
-    // Deliver message
-    bool ok = send_to_central_node(radio, message);
-    if (ok)
-    printf("ok\n\r");
-    else
-    printf("failed.\n\r");
-  }
-
-  // Delay
-  delay(MEASURE_INTERVAL_MS);
+  // Wait a little to get the system ready and then print info.
+  delay(3000);
+  get_temperature();
+  print_node_info();
 }
 
 void setup_radio() {
@@ -92,4 +69,33 @@ void print_node_info() {
   Serial.print("USE_RF: "); Serial.println(USE_RF);
   Serial.print("DEBUG: "); Serial.println(DEBUG);
   Serial.println("======================");
+}
+
+void loop(void)
+{
+  float temperature = get_temperature();
+  char* temperature_str = float_to_string(temperature);
+
+  // TODO Generate this automatically
+  String message = "{\"node\": \"";
+  message.concat(ARDUINO_CLIENT_NODE);
+  message.concat("\", \"temperature\": ");
+  message.concat(temperature_str);
+  message.concat("}");
+  free(temperature_str);
+  
+  // Print message
+  Serial.println(message);
+  
+  if (USE_RF) {
+    // Deliver message
+    bool ok = send_to_central_node(radio, message);
+    if (ok)
+    printf("ok\n\r");
+    else
+    printf("failed.\n\r");
+  }
+
+  // Delay
+  delay(MEASURE_INTERVAL_MS);
 }

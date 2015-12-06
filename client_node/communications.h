@@ -8,7 +8,7 @@
 
 #include "RF24.h"
 
-#define MAX_RETRIES 10
+#define MAX_RETRIES 1
 
 //
 // Hardware configuration
@@ -59,26 +59,47 @@ bool send_to_central_node(RF24 radio, String message) {
 
   // send the start-message char
   c = '^';
-  reliable_send_char(radio, c);
+  sentOk = reliable_send_char(radio, c);
 
-  // Send message char by char
-  for (int i = 0; i < messageSize; i++) {
-    c = message.charAt(i);
-    //Serial.println(c);
-    sentOk = reliable_send_char(radio, c);
-  }
-
-  // Send success-message or faulty-message char
   if (sentOk) {
-    // send the 'end of message' value...  
-    c = '$';
-    return reliable_send_char(radio, c);
-  } else {
-    // send the 'faulty message' value (optional)
-    c = '#';
-    reliable_send_char(radio, c);
+    Serial.println("Start message!");
+    // Send message char by char
+    for (int i = 0; i < messageSize; i++) {
+      c = message.charAt(i);
+      Serial.print(c);
+      sentOk = reliable_send_char(radio, c);
+
+      // If we fail sending a char, break the process
+      if (!sentOk) {
+        break;
+      }
+    }
+  
+    // Send success-message or faulty-message char
+    if (sentOk) {
+      // send the 'end of message' value...  
+      c = '$';
+      sentOk = reliable_send_char(radio, c);
+    } else {
+      // send the 'faulty message' value (optional)
+      c = '#';
+      for (int i = 0; i < 5; i++) {
+        if(reliable_send_char(radio, c)) {
+          break;
+        }
+      }
+    }
   }
-  return false; 
+  if (sentOk) {
+    Serial.print(" Success!");
+  } else {
+    Serial.println(" Error!");
+  }
+  radio.powerDown();
+  delay(10);
+  radio.powerUp();
+  delay(500);
+  return sentOk; 
 }
 
 // End
